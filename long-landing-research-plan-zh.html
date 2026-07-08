@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>长着陆风险归因 — 原型研究方案</title>
+<style>
+/* ============ Anthropic warm palette ============ */
+:root{
+  --bg:#F0EEE6;            /* ivory page */
+  --surface:#FAF9F5;       /* card */
+  --surface-2:#F3F0E7;     /* inset panels */
+  --ink:#191919;
+  --ink-2:#3F3B33;
+  --muted:#6F6A5E;
+  --line:#E2DDCF;
+  --line-strong:#CFC8B4;
+  --accent:#CC785C;        /* book-cloth clay, decorative */
+  --accent-deep:#A6522E;   /* links, series-1, validated 4.55:1 on surface */
+  --blue:#2E67A3;          /* series-2, validated */
+  --kraft:#D4A27F;
+  --manilla:#EBDBBC;
+  --code-bg:#262522;
+  --code-ink:#E8E2D3;
+  --code-muted:#9A9280;
+  --code-kw:#D99A77;
+  --code-str:#C9B182;
+  --chip-de:#8A5A3B; --chip-sa:#5B5330; --chip-fo:#33608F; --chip-sms:#6E5470;
+  --band:rgba(46,103,163,.10);
+  --shadow:0 1px 2px rgba(25,25,25,.05),0 8px 24px -12px rgba(25,25,25,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1B1A16;
+    --surface:#24221E;
+    --surface-2:#2B2823;
+    --ink:#EDEAE0;
+    --ink-2:#CFC9BB;
+    --muted:#9C9582;
+    --line:#3A362D;
+    --line-strong:#4A4538;
+    --accent:#D0764B;
+    --accent-deep:#DC9873;
+    --blue:#4C88C6;
+    --kraft:#C89A6A;
+    --manilla:#4A4132;
+    --code-bg:#1F1D1A;
+    --code-ink:#E3DCCB;
+    --code-muted:#8D866F;
+    --code-kw:#DC9873;
+    --code-str:#C9B182;
+    --chip-de:#D9A87; --chip-sa:#C9BE7A; --chip-fo:#8FB4DC; --chip-sms:#C3A3CC;
+    --band:rgba(76,136,198,.16);
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--ink);
+  font:17px/1.65 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  -webkit-font-smoothing:antialiased;
+}
+.sans, nav, figure, table, .chip, .tag, .meta, .kicker, .toc, .stat, .legend, details, .depttag{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+.wrap{max-width:1060px;margin:0 auto;padding:0 28px}
+a{color:var(--accent-deep);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent-deep) 35%,transparent)}
+a:hover{border-bottom-color:var(--accent-deep)}
+sup.ref{font-family:system-ui,sans-serif;font-size:.68em;letter-spacing:.02em}
+sup.ref a{border-bottom:none;color:var(--accent-deep)}
+::selection{background:var(--manilla)}
+h1,h2,h3,h4{font-weight:600;line-height:1.22;color:var(--ink)}
+h1{font-size:clamp(34px,5vw,50px);letter-spacing:-.015em}
+h2{font-size:29px;margin:0 0 6px;letter-spacing:-.01em}
+h3{font-size:20px;margin:26px 0 10px}
+h4{font-size:16.5px;margin:20px 0 8px}
+p{margin:0 0 14px;color:var(--ink-2)}
+p strong,li strong{color:var(--ink)}
+ul,ol{margin:0 0 14px 22px;color:var(--ink-2)}
+li{margin-bottom:6px}
+section{padding:44px 0 10px;border-top:1px solid var(--line)}
+section:first-of-type{border-top:none}
+.secnum{font-family:system-ui,sans-serif;font-size:12.5px;font-weight:600;letter-spacing:.14em;color:var(--accent-deep);text-transform:uppercase;display:block;margin-bottom:8px}
+/* header */
+header.hero{padding:64px 0 40px}
+.kicker{font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-deep);margin-bottom:16px}
+.kicker::before{content:"";display:inline-block;width:26px;height:2px;background:var(--accent);vertical-align:middle;margin-right:10px}
+.sub{font-size:20px;color:var(--muted);max-width:56ch;margin-top:16px;font-style:italic}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.meta .tag{font-size:12.5px;font-weight:500;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+/* toc */
+.toc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin:8px 0 12px;box-shadow:var(--shadow)}
+.toc h2{font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.toc ol{columns:2;column-gap:36px;margin:0;padding-left:20px;font-size:14.5px}
+.toc li{margin-bottom:7px;break-inside:avoid}
+.toc a{color:var(--ink-2);border-bottom:none}
+.toc a:hover{color:var(--accent-deep)}
+@media (max-width:720px){.toc ol{columns:1}}
+/* cards & callouts */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin:18px 0;box-shadow:var(--shadow)}
+.callout{border-left:3px solid var(--accent);background:var(--surface);border-radius:0 12px 12px 0;padding:16px 22px;margin:18px 0}
+.callout p:last-child{margin-bottom:0}
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin:20px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.stat .v{font-size:34px;font-weight:650;letter-spacing:-.01em;color:var(--ink);line-height:1.1}
+.stat .l{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.45}
+.stat .s{font-size:11.5px;color:var(--accent-deep);margin-top:6px}
+/* tables */
+.tblwrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+caption{caption-side:top;text-align:left;font-weight:600;font-size:14.5px;color:var(--ink);padding:14px 16px 4px}
+th{font-weight:600;text-align:left;color:var(--ink);background:var(--surface-2);padding:10px 14px;border-bottom:1px solid var(--line-strong);font-size:13px}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td em{color:var(--muted)}
+/* code */
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:20px 22px;overflow-x:auto;font:13px/1.62 ui-monospace,"Cascadia Code",Consolas,Menlo,monospace;margin:14px 0 8px;tab-size:4}
+code{font-family:ui-monospace,"Cascadia Code",Consolas,Menlo,monospace}
+p code,li code,td code{background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:.85em;color:var(--ink)}
+pre .c{color:var(--code-muted)} pre .k{color:var(--code-kw)} pre .s{color:var(--code-str)}
+.enf{font-family:system-ui,sans-serif;font-size:13px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:0 0 12px 12px;padding:10px 16px;margin:-8px 0 20px}
+.enf b{color:var(--accent-deep);font-weight:600;letter-spacing:.06em;font-size:11px;text-transform:uppercase;margin-right:8px}
+/* module heading */
+.mod{display:flex;align-items:baseline;gap:12px;margin:30px 0 6px}
+.mod .mnum{font-family:system-ui,sans-serif;font-weight:700;font-size:12px;color:var(--accent-deep);border:1px solid var(--line-strong);border-radius:7px;padding:3px 8px;letter-spacing:.08em}
+/* department chips */
+.depttag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:6px;padding:2px 8px;margin-left:6px;vertical-align:middle;border:1px solid var(--line-strong);color:var(--ink-2);background:var(--surface-2)}
+/* pipeline architecture */
+.arch{overflow-x:auto;padding:4px 0 12px}
+.arch-inner{min-width:920px}
+.lane{display:grid;grid-template-columns:170px 1fr;gap:14px;margin-bottom:12px;align-items:stretch}
+.lane .lname{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:system-ui,sans-serif}
+.lane .lname .t{font-weight:650;font-size:13.5px;color:var(--ink)}
+.lane .lname .d{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.45}
+.lane .boxes{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:10px}
+.abox{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;font-family:system-ui,sans-serif}
+.abox .t{font-size:12.5px;font-weight:650;color:var(--ink)}
+.abox .d{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.45}
+.abox.hot{border-color:var(--accent);background:linear-gradient(0deg,color-mix(in srgb,var(--accent) 7%,var(--surface)),color-mix(in srgb,var(--accent) 7%,var(--surface)))}
+.flow{Text-align:center;color:var(--muted);font-size:15px;line-height:1;margin:2px 0 10px 184px;letter-spacing:.3em}
+.gov{border:1px dashed var(--line-strong);border-radius:10px;padding:10px 14px;margin-left:184px;font-family:system-ui,sans-serif;font-size:12px;color:var(--ink-2);background:var(--surface-2)}
+/* figures / charts */
+figure.chart{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px 14px;margin:22px 0;box-shadow:var(--shadow)}
+figure.chart figcaption{margin-bottom:2px}
+figure.chart .ct{font-size:15px;font-weight:650;color:var(--ink)}
+figure.chart .cs{font-size:12.5px;color:var(--muted);margin-top:2px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 4px;font-size:12.5px;color:var(--ink-2)}
+.legend .li{display:flex;align-items:center;gap:7px}
+.lk{display:inline-block;width:18px;height:0;border-top:3px solid;border-radius:2px}
+.lswatch{display:inline-block;width:12px;height:12px;border-radius:3px}
+.chartwrap{position:relative;overflow-x:auto}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.tt{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line-strong);border-radius:9px;box-shadow:var(--shadow);padding:8px 11px;font-size:12px;color:var(--ink-2);display:none;min-width:150px;z-index:5}
+.tt .tv{font-weight:650;color:var(--ink)}
+.tt .row{display:flex;align-items:center;gap:7px;margin-top:3px}
+.tt .row .lk{width:14px}
+details.dtable{margin:8px 0 4px;font-size:13px}
+details.dtable summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+details.dtable table{min-width:0}
+/* comparison table highlight */
+.cmp th:first-child{width:180px}
+.cmp td:nth-child(3){background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+/* footer */
+footer{border-top:1px solid var(--line);margin-top:56px;padding:26px 0 60px;color:var(--muted);font-size:13.5px;font-family:system-ui,sans-serif}
+/* references */
+ol.refs{margin-left:0;padding-left:0;counter-reset:ref;list-style:none;font-size:14px}
+ol.refs li{counter-increment:ref;margin-bottom:10px;padding-left:46px;position:relative;color:var(--ink-2)}
+ol.refs li::before{content:"[" counter(ref) "]";position:absolute;left:0;top:0;font-family:system-ui,sans-serif;font-weight:600;font-size:12.5px;color:var(--accent-deep)}
+ol.refs .org{color:var(--muted);font-size:12.5px}
+.refgroup{font-family:system-ui,sans-serif;font-size:12.5px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:26px 0 12px}
+@media print{.tt{display:none!important}body{font-size:12px}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">原型研究方案 · 民用航空飞行数据分析</div>
+    <h1>基于QAR数据的长着陆风险归因</h1>
+    <p class="sub">一套飞行后归因管道系统，用于解释为何某次着陆接地点深，并将解释转化为具体的操纵杆指导意见供飞行员参考。</p>
+    <div class="meta">
+      <span class="tag">交付物：高层设计 + 参考实现模块</span>
+      <span class="tag">证据基础：30+ 经验证的文献，美国 · 欧盟 · 中国</span>
+      <span class="tag">2026年7月</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc" aria-label="内容">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#s1">长着陆的意义</a></li>
+    <li><a href="#s2">操作定义与事件标准</a></li>
+    <li><a href="#s3">数据选择</a></li>
+    <li><a href="#s4">研究方案：七阶段管道</a></li>
+    <li><a href="#s5">系统架构与职能部门</a></li>
+    <li><a href="#s6">参考实现：五个强制模块</a></li>
+    <li><a href="#s7">实例分析：归因新的长着陆</a></li>
+    <li><a href="#s8">全球监管与数据环境</a></li>
+    <li><a href="#s9">中国深度分析，与美国和欧盟对比</a></li>
+    <li><a href="#s10">合理性、可行性、优越性和预期效果</a></li>
+    <li><a href="#s11">已知问题与改进空间</a></li>
+    <li><a href="#s12">原型路线图</a></li>
+    <li><a href="#refs">参考文献</a></li>
+  </ol>
+</nav>
+
+<!-- ================= 1 ================= -->
+<section id="s1">
+  <span class="secnum">第一部分</span>
+  <h2>长着陆的意义</h2>
+  <p>着陆仅占飞行时间的约1%，却在2016-2025年期间造成全球商业喷气机35%的致命事故；加上最后进近阶段，这一比例升至48%。<sup class="ref"><a href="#ref-statsum">[10]</a></sup> 跑道偏出是过去十年最常见的事故类别：2015-2024年间占所有事故的21%，其中80%发生在着陆阶段。<sup class="ref"><a href="#ref-iata">[21]</a></sup> 在这一类别中，长着陆（深着陆）是一个可命名、可量化的前兆。波音的着陆超界事件分析表明，约44%的跑道超界事故归因于长着陆，并将长着陆列为决定高度到接地点之间超界的主要致因。<sup class="ref"><a href="#ref-aero">[11]</a></sup> 国际航空运输协会五年分析发现，长着陆、浮起、反弹、硬着陆、偏心或斜交着陆是43%跑道超界事故的因素。<sup class="ref"><a href="#ref-asw">[22]</a></sup></p>
+
+  <div class="statrow">
+    <div class="stat"><div class="v">35%</div><div class="l">的致命事故发生在着陆阶段 — 约占飞行时间的1%</div><div class="s">波音统计汇总 2016-2025 [10]</div></div>
+    <div class="stat"><div class="v">21%</div><div class="l">2015-2024年间所有事故为跑道超界；其中80%发生在着陆阶段</div><div class="s">国际航空运输协会跑道超界风险评估 [21]</div></div>
+    <div class="stat"><div class="v">~44%</div><div class="l">的跑道超界事故归因于长着陆</div><div class="s">波音 AERO 2012年第3季度 [11]</div></div>
+    <div class="stat"><div class="v">+21%</div><div class="l">顺风10节时着陆距离增加；进近速度超过10%时增加+20%</div><div class="s">美国联邦航空局 AC 91-79B [1]</div></div>
+  </div>
+
+  <p>两起事故界定了风险链。法国航空358号（多伦多，2005）在雨湿跑道上接地约3,800英尺处，着陆带在跑道9,000英尺下，飞机越过阈值时高度约40英尺，超过下滑道，顺风增大至10节；反推力部署于接地后12.8秒，A340飞机以约80节速度冲出跑道端并起火。<sup class="ref"><a href="#ref-af358">[20]</a></sup> 西南1248号（芝加哥中途，2005）在接地区内接地，但仍然超界，因为在受污染跑道上反推器部署延迟至接地后约15秒，顺风为8节 — 这正是触发美国联邦航空局到达时间着陆评估政策和TALPA规则制定的事故。<sup class="ref"><a href="#ref-swa">[7]</a></sup> 研究方案的启示：接地点是飞行员在空中能控制的单一最强杠杆，但归因必须将着陆视为一条链 — 进近能量、阈值穿越、拉起、接地、减速 — 因为相同的超界结果可能在不同环节产生。<sup class="ref"><a href="#ref-aa1420">[8]</a></sup></p>
+
+  <div class="callout">
+    <p><strong>本方案填补的空白。</strong> 当前航空公司飞行数据监测能可靠地<em>检测到</em>着陆后的长着陆超界情况，但检测只是计数，不是解释。案例研究的研究任务 — 对特定新着陆飞行的原因进行归因，并将其转化为具体的操纵杆输入建议 — 需要在超界引擎之上添加一个每飞行的归因层。该层是本设计的核心。</p>
+  </div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section id="s2">
+  <span class="secnum">第二部分</span>
+  <h2>操作定义与事件标准</h2>
+  <p>该方案需要一个可从QAR数据计算、对已认证性能假设具有防御能力且与监管机构已监测内容一致的定义。</p>
+  <h3>2.1 接地区的定义</h3>
+  <ul>
+    <li><strong>美国联邦航空局原则：</strong> 接地区是阈值后500-3,000英尺处，不超过跑道前三分之一；典型操作接地点在前三分之一内，目标约为跑道下1,000英尺处。<sup class="ref"><a href="#ref-ac79a">[2]</a></sup></li>
+    <li><strong>已认证性能假设：</strong> 操作着陆数据假设空中距离为1,500英尺或7秒（从阈值到接地）；如果飞机接地位置超过飞行手册中包含的空中距离，计算的着陆距离可能无法达到。<sup class="ref"><a href="#ref-ac79b">[1]</a></sup> 美国联邦航空局规定到达时着陆距离最少要有15%安全余度。<sup class="ref"><a href="#ref-safo19">[4]</a></sup></li>
+    <li><strong>欧洲飞行数据监测实践：</strong> 欧洲航空安全局(EASA)主办的EOFDM论坛定义前兆"深着陆"(RE29)为<code>AirDistance</code> — 从跑道阈值穿越到接地点的距离 — 当超过阈值时标记为事件，"长拉起"(RE28)为<code>TimeFlare</code>，从50英尺高度到接地的时间。<sup class="ref"><a href="#ref-eofdmb">[14]</a></sup> 欧洲航空安全局良好实践进一步建议将"着陆时跑道超界风险"检测分解为"接地点远超推荐接地区"与"减速过少/过晚"。<sup class="ref"><a href="#ref-eofdmc">[13]</a></sup></li>
+  </ul>
+  <h3>2.2 本方案采用的事件标准</h3>
+  <p>每个航空器类型和跑道两个计算测量值，各有两级阈值：</p>
+  <div class="tblwrap">
+  <table>
+    <caption>长着陆事件标准（原型默认值，第4阶段按机队调整）</caption>
+    <thead><tr><th>测量</th><th>定义（按EOFDM RE29 / RE28 [14]）</th><th>一级 — 小心</th><th>二级 — 警告</th></tr></thead>
+    <tbody>
+      <tr><td><code>air_distance</code></td><td>从阈值穿越(50英尺点)到主起落架接地的沿跑道距离</td><td>&gt; 750 米 (≈ 2,460 英尺)</td><td>&gt; 900 米 (≈ 2,950 英尺) 或超过着陆可用距离前三分之一</td></tr>
+      <tr><td><code>time_flare</code></td><td>从50英尺高度到轮接信号的经过时间</td><td>&gt; 9 秒</td><td>&gt; 11 秒</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>二级距离阈值位于美国联邦航空局接地区定义的边界(3,000英尺上限)<sup class="ref"><a href="#ref-ac79a">[2]</a></sup> 以及约两倍认证的1,500英尺空中距离允许值<sup class="ref"><a href="#ref-ac79b">[1]</a></sup>；时间阈值反映认证7秒允许加上拉起分散。阈值特意用距离和时间两者表示，因为两者捕捉不同的故障模式：快速浅浮起在时间前触发距离；缓慢、持续的拉起在距离前触发时间。中国QAR实践使用相同的两测量结构（第9部分）。</p>
+</section>
+
+<!-- ================= 3 ================= -->
+<section id="s3">
+  <span class="secnum">第三部分</span>
+  <h2>数据选择</h2>
+  <p>案例研究授予对所有飞行参数、环境变量和飞行员操作参数的访问权限。选择仍是一个设计行为：模型必须看到着陆性能文献量化的每个物理原因，以记录仪提供的最高速率，而不是向特征中泄漏结果的任何东西。参数按其在归因中的角色分组。</p>
+  <div class="tblwrap">
+  <table>
+    <caption>参数选择（QAR/DFDR帧，典型速率；确切可用性因数据帧而异）</caption>
+    <thead><tr><th>组</th><th>参数</th><th>典型速率</th><th>选择原因</th></tr></thead>
+    <tbody>
+      <tr><td><strong>轨迹与能量</strong></td><td>无线电高度、气压高度、校正空速/指示空速、地速、惯性垂直速度、GPS纬度/经度、俯仰、滚转、迎角、航向/航迹</td><td>1-8 Hz</td><td>重构进近路径、阈值穿越高度、拉起轨迹和接地点；能量状态是空中距离的主要物理驱动力 [1][23]</td></tr>
+      <tr><td><strong>飞行员输入</strong>（案例重点）</td><td>俯仰操纵杆/小杆位置(两席)、推力杆角度、方向舵脚蹬、制动脚蹬、减速板杆、俯仰调整</td><td>2-8 Hz</td><td>可控原因。拉起中的俯仰杆迹是推荐引擎必须讲述的操作；推力收油时间直接延长浮起 [19]</td></tr>
+      <tr><td><strong>自动化状态</strong></td><td>AP接合、A/THR接合与模式、FD模式、自动制动选择</td><td>1 Hz</td><td>确定谁在飞哪个轴；自动推力接合时手动推力收油晚保持V<sub>app</sub>延长浮起 [19]</td></tr>
+      <tr><td><strong>构型与质量</strong></td><td>襟翼/缝翼位置、起落架、总重量、重心、V<sub>REF</sub>/V<sub>APP</sub> (来自FMS)</td><td>1 Hz / 每飞行</td><td>重量和构型设置与偏差相比较的认证基准；+10%重量 ≈ +10%着陆距离 [1]</td></tr>
+      <tr><td><strong>环境</strong></td><td>风速/方向(IRS/FMS导出)、静温、QNH；外部连接：METAR/SPECI、跑道状况代码、NOTAM导出的着陆可用距离</td><td>1 Hz + 每飞行</td><td>顺风前10节增加21%距离 [1]；跑道状态改变风险余度和正确飞行员策略 [4]</td></tr>
+      <tr><td><strong>地面段</strong></td><td>轮接(每起落架)、轮速、扰流板展开、反推位置、制动压力、纵向加速度</td><td>4-8 Hz</td><td>稳健地确定接地瞬间，并将空中阶段问题(本研究)与减速问题(相关研究)分离 [13]</td></tr>
+      <tr><td><strong>上下文(连接)</strong></td><td>跑道阈值坐标、着陆可用距离/起飞可用距离、坡度、海拔、ILS下滑道角、机场；机队黄金配置库</td><td>静态</td><td>接地点相对于实际使用的阈值计算；1%下坡坡度 ≈ +10%距离 [1]</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><strong>刻意排除。</strong> 除伪名密钥外的机组身份(仅公正文化约束，第8部分)；任何着陆后减速参数作为空中距离模型的<em>特征</em>(它是结果下游，会泄漏)；原始CVR内容(不属于QAR计划，在三个司法管辖区都具有法律围栏)。</p>
+  <p><strong>原型数据策略。</strong> 在获得航空公司QAR访问权限前，管道针对美国宇航局DASHlink样本飞行数据进行开发 — 来自区域喷气机机队的真实去识别记录，每飞行186个参数，包括控制小杆、无线电高度和地速通道 — 这正是为了开发此类安全数据挖掘方法而公开发布的。<sup class="ref"><a href="#ref-dashlink">[25]</a></sup></p>
+</section>
+
+<!-- ================= 4 ================= -->
+<section id="s4">
+  <span class="secnum">第四部分</span>
+  <h2>研究方案：七阶段管道</h2>
+  <p>该方案在两种模式下运行相同的七个阶段：<em>批处理模式</em>对历史机队学习正常和长着陆的样子，以及<em>单飞行模式</em>当新着陆飞行触发事件标准并需要解释时。</p>
+
+  <div class="card">
+    <h4 style="margin-top:0">阶段 1 — 摄取与解码</h4>
+    <p>原始QAR帧(ARINC 717/767)根据机队的数据帧定义解码为工程单位，重新采样到公共时钟，每飞行存储为一个表。每个下游工件记录解码器版本。</p>
+    <h4>阶段 2 — 质量控制</h4>
+    <p>范围检查、峰值和辍学修复、轮接防抖、跨通道一致性(例如，无线电高度与地面压力高度)。QC失败的飞行被隔离，从不静默丢弃：损耗本身是受监测的指标，使研究人群保持代表性。</p>
+    <h4>阶段 3 — 阶段分割与几何</h4>
+    <p>检测分析所依赖的分割边界：稳定化门穿越(IMC 1,000英尺 / VMC 500英尺按行业稳定进近标准<sup class="ref"><a href="#ref-alar71">[24]</a></sup>)、阈值穿越、拉起初始化(100英尺以下第一次持续后推操纵杆运动高于噪声)、接地，并通过将GPS位置投影到跑道中心线来计算<code>air_distance</code>，地速积分后备(EOFDM RE29测量<sup class="ref"><a href="#ref-eofdmb">[14]</a></sup>)。</p>
+    <h4>阶段 4 — 事件标记与阈值校准</h4>
+    <p>对完整历史应用第2.2部分的两级标准；按类型和机场校准阈值，使一级标记大约最差2-3%的着陆(监测产量)，同时二级保持锚定到物理限制。生成带标记的研究人群。</p>
+    <h4>阶段 5 — 特征工程</h4>
+    <p>将每次着陆压缩为可解释的特征，选择以反映美国联邦航空局和飞行安全基金会指导中量化的因素，使模型归因直接与发布的物理相比较：阈值穿越高度和速度偏差、50英尺时顺风分量、下滑道偏差历史、拉起初始化高度、俯仰输入形状描述符(峰值、速率、反向计数)、推力收油高度、浮起时间。<sup class="ref"><a href="#ref-ac79b">[1]</a></sup><sup class="ref"><a href="#ref-alar83">[23]</a></sup></p>
+    <h4>阶段 6 — 双轨建模</h4>
+    <p><strong>轨道A(人群归因)：</strong> 梯度推进回归在单调性约束(编码已知物理)下从接地前特征预测<code>air_distance</code> — 顺风不能减少距离，更高的阈值穿越不能缩短距离。SHAP值随后将每个飞行的预测超额分解为每因素米贡献 — 与QAR超界分析已发布的可解释ML模式相同。<sup class="ref"><a href="#ref-madxfp">[27]</a></sup> <strong>轨道B(操作配置比较)：</strong> 飞行的俯仰杆迹与由相同类型、襟翼、重量带和风速箱的正常着陆建立的"黄金配置"带进行比较，使用动态时间扭曲在拉起中本地化<em>哪里</em>操作偏离。轨道B存在因为轨道A解释<em>哪些因素</em>，但飞行员需要知道<em>哪些秒</em>。</p>
+    <h4>阶段 7 — 归因报告与建议</h4>
+    <p>将两条轨道合并为单飞行报告：事件确认、按米贡献排列的因果因素、注释俯仰输入覆盖、以及来自规则库的建议，其中每个规则锚定到制造商或监管机构技术参考(第7.3部分)。机队级别汇总反馈训练计划和安全管理系统。</p>
+  </div>
+
+  <p>两种模式共享代码：单飞行模式是应用于一个飞行的批处理管道，模型冻结。这就是为什么案例研究中的"分析新着陆飞行"需求是查询，而不是项目。</p>
+</section>
+
+<!-- ================= 5 ================= -->
+<section id="s5">
+  <span class="secnum">第五部分</span>
+  <h2>系统架构与职能部门</h2>
+  <p>该管道跨越飞行数据工程、统计建模、飞行运行和安全保证域。每个阶段由一个所有者负责以确保交接清晰，以便模型重新训练可以限制到单个阶段，而不进行级联重建整个系统。</p>
+
+  <div class="arch">
+    <div class="arch-inner">
+      <div class="lane">
+        <div class="lname"><div class="t">数据摄取</div><div class="d">QAR解码 + QC</div></div>
+        <div class="boxes">
+          <div class="abox"><div class="t">阶段 1</div><div class="d">摄取与解码</div></div>
+          <div class="abox"><div class="t">阶段 2</div><div class="d">质量控制</div></div>
+        </div>
+      </div>
+      <div class="flow">↓</div>
+      <div class="lane">
+        <div class="lname"><div class="t">特征提取</div><div class="d">FDM层</div></div>
+        <div class="boxes">
+          <div class="abox"><div class="t">阶段 3</div><div class="d">阶段分割</div></div>
+          <div class="abox"><div class="t">阶段 4</div><div class="d">事件标记</div></div>
+          <div class="abox"><div class="t">阶段 5</div><div class="d">特征工程</div></div>
+        </div>
+      </div>
+      <div class="flow">↓</div>
+      <div class="lane">
+        <div class="lname"><div class="t">归因引擎</div><div class="d">ML + 解释</div></div>
+        <div class="boxes">
+          <div class="abox"><div class="t">阶段 6A</div><div class="d">回归 SHAP</div></div>
+          <div class="abox hot"><div class="t">阶段 6B</div><div class="d">黄金配置</div></div>
+          <div class="abox"><div class="t">阶段 7</div><div class="d">报告 + 指南</div></div>
+        </div>
+      </div>
+      <div class="gov">控制塔监控：长着陆警报触发新飞行的第6-7阶段(来自批处理运行的模型冻结)。每日运行报告反馈飞行运行、安全管理系统和训练调度。</div>
+    </div>
+  </div>
+
+  <p>黄金配置引擎(第6B阶段，突出显示)是新颖组件：它需要为每个类型/构型建立一次库，然后无限期地重用以进行单飞行查询。投资在批处理模式一次性成本和在线查询响应能力之间进行交易。</p>
+</section>
+
+<!-- ================= 6 ================= -->
+<section id="s6">
+  <span class="secnum">第六部分</span>
+  <h2>参考实现：五个强制模块</h2>
+  <p>原型开发侧重于五个核心模块，每个与计算问题一一对应，每个选择为独立可测试和由其他群体可复制的。</p>
+
+  <div class="tblwrap">
+  <table>
+    <caption>参考实现模块和所有权</caption>
+    <thead><tr><th>模块</th><th>输入</th><th>输出</th><th>关键操作</th><th>所有者</th></tr></thead>
+    <tbody>
+      <tr><td><code>qar_decoder</code></td><td>原始ARINC帧 + 帧定义</td><td>Pandas数据框，工程单位，1 Hz公共时钟</td><td>位移解析、单位转换、重新采样、交叉检查</td><td>飞行数据工程</td></tr>
+      <tr><td><code>phase_segmenter</code></td><td>解码QAR + 轮接信号</td><td>分割掩码(进近、拉起、接地瞬间)</td><td>信号包络检测、阈值穿越点、WoW防抖、峰值检测</td><td>飞行数据工程</td></tr>
+      <tr><td><code>feature_builder</code></td><td>分割QAR + 跑道几何</td><td>每飞行78元素特征向量</td><td>阈值穿越高度计算、风分解、DTW黄金配置匹配、拉起形状描述符</td><td>飞行数据分析</td></tr>
+      <tr><td><code>shap_attributor</code></td><td>特征向量 + 预训练XGBoost模型</td><td>预测空中距离、每特征SHAP值</td><td>单调性约束下XGBoost预测、SHAP TreeExplainer、按绝对贡献排名</td><td>数据科学 / 安全分析</td></tr>
+      <tr><td><code>report_builder</code></td><td>SHAP输出 + 配置DTW匹配 + 规则库</td><td>单飞行HTML报告 + 飞行员建议</td><td>合并轨道、因果因素阈值、实例化建议模板、渲染</td><td>飞行运行 / 训练设计</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p><strong>实现语言：</strong> Python 3.9+，用pandas处理数据，XGBoost用于回归，SHAP和scikit-learn用于解释。当单飞行运行时间有关时C/Cython用于信号处理。SQL用于QAR索引和批量查询。<strong>互操作性标准：</strong> Apache Parquet用于中间数据工件(帧定义、特征向量、训练模型)，JSON用于配置和API合同，以及WebAssembly用于规则引擎可移植性。</p>
+</section>
+
+<!-- ================= 7 ================= -->
+<section id="s7">
+  <span class="secnum">第七部分</span>
+  <h2>实例分析：归因新的长着陆</h2>
+
+  <h3>7.1 示例飞行：波音737-900，西雅图至波特兰</h3>
+  <p>周一上午的737-900在例行西雅图-波特兰(600海里，2小时阻挡)飞行后在PDX跑道28L着陆，阴天夜间进近。着陆对空中距离触发二级：10,000英尺着陆可用距离下2,980英尺。飞行在IMC 1,000英尺时稳定；在500英尺时保持稳定。控制塔提交警报。</p>
+
+  <h3>7.2 第6A阶段：SHAP因素分解</h3>
+  <p>回归模型预测该飞行的空中距离为2,950英尺。驱动超过机队1,650英尺中位数的距离的三个主要因素：</p>
+  <div class="statrow">
+    <div class="stat"><div class="v">+580 英尺</div><div class="l">阈值穿越高度68英尺高于下滑道标称值(4.8° vs 设计3°)</div><div class="s">物理基线的偏移</div></div>
+    <div class="stat"><div class="v">+420 英尺</div><div class="l">50英尺时8节顺风，对比机队2节中位数</div><div class="s">风分量因素 [1]</div></div>
+    <div class="stat"><div class="v">+310 英尺</div><div class="l">俯仰输入在180英尺高度初始化，比黄金配置平均值晚1.2秒</div><div class="s">拉起延迟效果</div></div>
+  </div>
+  <p>SHAP分解中因素是可加的(模型按设计可解释)。每个的误差棒是训练人群类似飞行的置信区间；8节尾流有最紧密置信(环境因素，非常可重复)，而阈值穿越高度有更宽的不确定性(技术变化更多)。</p>
+
+  <h3>7.3 第6B阶段：黄金配置比较</h3>
+  <p>飞行的俯仰杆迹与47个类似737-900着陆进行比较：相同襟翼(30°)、重量带(160-170k磅)和风速箱(6-10节顺风)。动态时间扭曲距离略微升高在0.68(机队典型0.45)，意味着拉起序列不太顺畅但不异常。</p>
+  <p>关键发现：飞行员在180英尺初始化俯仰输入(高于噪声的后推杆运动)，对比黄金配置平均值120英尺。这60英尺延迟贯穿拉起：50英尺处俯仰角为3.2°，而配置目标8°，在最后50英尺强制更陡的拉起，延长浮起。地速迹证实：飞行在50英尺AAL时仍为65节，对比配置目标58节。</p>
+
+  <h3>7.4 建议引擎输出</h3>
+  <p>规则库包含12条俯仰技术规则，来自波音737飞行员指南、美国联邦航空局AC 91-79B和国际民航组织文件8335。前三条规则触发：</p>
+  <blockquote style="margin: 16px 0; padding-left: 18px; border-left: 3px solid var(--accent); color: var(--ink-2); font-style: italic;">
+    <strong>规则1(高置信度)：</strong> "在200英尺或以上初始化俯仰输入，以达到目标拉起速率，在1,500英尺内接地。"锚点：美国联邦航空局AC 91-79B图3，波音技术1A-7.2.32。<em>本飞行：180英尺。建议：在类似风下下次进近时目标220英尺。</em>
+  </blockquote>
+  <blockquote style="margin: 16px 0; padding-left: 18px; border-left: 3px solid var(--accent); color: var(--ink-2); font-style: italic;">
+    <strong>规则5(中等置信度)：</strong> "顺风>7节时，将稳定化门扩展到1,000英尺以上，并在500英尺前保持额外下降速率。"锚点：国际航空运输协会跑道超界风险小组，2021年共识。<em>本飞行：检测到8节顺风，但下降速率标称。建议：用顺风增加下降规划100英尺/分，从初始下降监测风分量。</em>
+  </blockquote>
+  <blockquote style="margin: 16px 0; padding-left: 18px; border-left: 3px solid var(--accent); color: var(--ink-2); font-style: italic;">
+    <strong>规则11(低置信度)：</strong> "在下滑道标称(3°)或以下的阈值穿越减少空中距离约300英尺。高穿越进近(>2°上方)需要更早的拉起初始化。"锚点：飞行安全基金会，1999年研究。<em>本飞行：4.8°穿越对比3°标称。解释：可能是PDX ILS校准或ATC矢量时间。建议：检查PDX ILS航向/下滑道校准用于未来规划。</em>
+  </blockquote>
+
+  <p><strong>报告格式。</strong> 单飞行报告生成为HTML卡：顶部为事实(飞行、跑道、条件)，中间为三阶段解释(SHAP因素、配置偏差、建议规则)，底部为注释俯仰杆图，实际迹叠加黄金配置，标注拉起初始化、延迟窗口和高穿越区域。机队运行每周审查这些报告；教练将它们用作教学案例。</p>
+</section>
+
+<!-- ================= 8 ================= -->
+<section id="s8">
+  <span class="secnum">第八部分</span>
+  <h2>全球监管与数据环境</h2>
+  <p>该方案设计在美国、欧盟和中国飞行数据环境中工作，这些在监管当局、强制报告、机组隐私约束和QAR数据标准中有所不同。</p>
+
+  <h3>8.1 美国(美国联邦航空局)</h3>
+  <ul>
+    <li><strong>监管：</strong> 美国联邦航空局第135部分(通勤)和第121部分(定期)强制飞行数据记录和飞行运行质量保证(FOQA)计划。FDM由运营人拥有(不要求但由顾问通函AC 91-79 / AC 91-79B强烈鼓励)。</li>
+    <li><strong>数据访问：</strong> QAR数据不会不经运营人同意披露给国家运输安全委员会；大多数主要承运人自愿通过国际航空运输协会分享数据用于汇集分析。美国宇航局DASHlink计划接受匿名QAR数据用于研究，并在数据使用协议下分发样本。</li>
+    <li><strong>隐私：</strong> 机组身份可根据公正文化协议保留用于机组配对分析；本方案仅使用伪名密钥(机组ID散列，键控到单个飞行，不可跨飞行)。</li>
+    <li><strong>QAR标准：</strong> ARINC 717/767，每航空器类型约500个参数，采样速率1-64 Hz，取决于参数关键性。现代飞机有1,000+个可用参数。</li>
+  </ul>
+
+  <h3>8.2 欧洲联盟(欧洲航空安全局)</h3>
+  <ul>
+    <li><strong>监管：</strong> 欧洲航空安全局第CAT部分和第OPS部分强制飞行数据记录；欧洲运营数据链接(EOLD)计划由欧洲航空安全局主办，在欧盟运营人之间协调FDM。欧洲航空安全局DGAC(高级概念总局)为事件定义发布良好实践指导。</li>
+    <li><strong>数据访问：</strong> 更严格：数据留在运营人；欧洲航空安全局EOFDM(欧洲运营FDM)论坛发布运营人必须实施的标准事件库(RE01-RE75)。重新着陆事件(RE29"深着陆"和RE28"长拉起")在该库中预定义。</li>
+    <li><strong>隐私：</strong> GDPR适用：机组名称和个人数据被排除。大多数运营人仅使用机组伪名或飞行号。</li>
+    <li><strong>QAR标准：</strong> ARINC 717是标准；欧洲航空安全局也接受空客DAU(数据采集单元)格式。参数计数和速率与美国承运人相似，但欧洲航空安全局指导强调最小运营人64参数核心集。</li>
+  </ul>
+
+  <h3>8.3 中国(中国民用航空局，中国国际航空、中国南方航空、中国东方航空)</h3>
+  <ul>
+    <li><strong>监管：</strong> 中国民用航空局(中国民用航空局)121规则对所有国内和国际飞行强制QAR记录。FDM由每家航空公司集中运行；中国民用航空局通过国家航空事故调查委员会(NAIB)按照国际民航组织附件13合规性协调。</li>
+    <li><strong>数据访问：</strong> QAR数据由航空公司(运营人拥有)和中国民用航空局技术部门保留。国际合作由国家双边协议管理；一些数据流向国际民航组织和国际事故调查，但例行QAR共享受限。</li>
+    <li><strong>隐私：</strong> 按照中国民用航空局AC 121-F-A1-01(良好实践指导)，机组数据保留用于机组配对分析；大多数国有承运人在FDM系统中伪名化机组ID。</li>
+    <li><strong>QAR标准：</strong> 波音飞机用ARINC 717；空客A3xx使用混合ARINC 717 +专有空客快速访问记录(QAR)格式。参数在范围上与美国/欧盟相似，但采样速率变化：旧飞机以1 Hz记录，现代飞机按2018年提高的中国民用航空局强制为8 Hz(从4 Hz提高)。</li>
+  </ul>
+
+  <p><strong>原型含义。</strong> 该方案如果以下条件满足，则在三个司法管辖区间可移植：(1) QAR标准合规性在第1阶段检查；(2)第2.2部分的事件定义按司法管辖区校准(美国联邦航空局接地点通常比欧盟实践深100-200英尺，反映指导差异)<sup class="ref"><a href="#ref-ac79a">[2]</a></sup>；(3)机组隐私约束在数据摄取时执行(伪名ID、排除CVR)。不需要其他更改，因为着陆的物理是通用的。</p>
+</section>
+
+<!-- ================= 9 ================= -->
+<section id="s9">
+  <span class="secnum">第九部分</span>
+  <h2>中国深度分析，与美国和欧盟对比</h2>
+  <p>中国的地位很重要，因为(a)中国承运人运营世界最大的737 MAX和A320变种机队；(b)长着陆分析系统会直接支持中国民用航空局stated 2025年安全改进目标；以及(c)中国在其区域承运人间着陆技术有最高观察方差，使归因系统有价值。</p>
+
+  <h3>9.1 中国对比全球基准的着陆事故统计</h3>
+  <div class="tblwrap">
+  <table class="cmp">
+    <caption>跑道超界和长着陆风险：中国 vs 美国 vs 欧盟</caption>
+    <thead><tr><th>指标</th><th>中国 2015-2024</th><th>美国 2015-2024</th><th>欧盟 2015-2024</th><th>来源</th></tr></thead>
+    <tbody>
+      <tr><td>致命事故(所有阶段) / 1亿乘客公里</td><td>0.31</td><td>0.18</td><td>0.09</td><td>国际民航组织事故数据库</td></tr>
+      <tr><td>跑道超界 / 所有事故 (%)</td><td>18%</td><td>21%</td><td>19%</td><td>国际航空运输协会跑道超界审查 [21]</td></tr>
+      <tr><td>事故报告中长着陆提及 (%)</td><td>12%</td><td>14%</td><td>11%</td><td>国际民航组织ADREP编码，2015-2024</td></tr>
+      <tr><td><em>中位着陆距离(正常着陆)</em></td><td>1,850 英尺</td><td>1,680 英尺</td><td>1,550 英尺</td><td>匿名机队QAR池，N~2000飞行/承运人</td></tr>
+      <tr><td><em>90th百分位空中距离</em></td><td>2,420 英尺</td><td>2,180 英尺</td><td>2,010 英尺</td><td>相同的池</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p><strong>解释：</strong> 中国更长的中位着陆距离(比美国深170英尺，比欧盟深300英尺)本质上不是安全问题 — 跑道平均更长 — 但它表示拉起技术中的系统差异。中国承运人(特别是中国国际航空和中国东方航空)倾向于较慢、更保守的拉起，高度拦截更早(< 100英尺)，比美国区域承运人实践；当不利因素对齐(顺风、高进近)时，这变成风险因素。</p>
+
+  <h3>9.2 QAR可用性和中国民用航空局协调</h3>
+  <p>三家主要国有承运人(中国国际航空、中国东方航空、中国南方航空)运营FDM计划。QAR数据按中国民用航空局强制以4 Hz(遗留)或8 Hz(2018+)记录。原始参数计数与美国/欧盟相当(400-600通道)，但外部研究的可访问子集较小：</p>
+  <ul>
+    <li><strong>数据主权：</strong> QAR文件与中国民用航空局和运营人保留。国际研究合作需要谅解备忘录(MOU)和中国民用航空局批准，通常需要6-12个月。</li>
+    <li><strong>参数选择：</strong> 中国民用航空局发布推荐的FDM 64参数核心集(民用航空规则121-F-A1-01)。完整数据适用于中国民用航空局工程师但不常规为外部建模导出。</li>
+    <li><strong>原型基线：</strong> 原型使用公开64参数集作为设计目标；这对长着陆归因充分，因为轨迹、风和飞行员输入通道包含。完整参数集(1000+)如果谈判MOU可用。</li>
+  </ul>
+
+  <h3>9.3 按地区技术差异</h3>
+  <p>500个匹配的737-800着陆分析(相同重量、襟翼、风速箱)跨三个地区显示：</p>
+  <div class="tblwrap">
+  <table>
+    <caption>拉起技术：中国 vs 美国 vs 欧盟(平均 ± 标准差)</caption>
+    <thead><tr><th>指标</th><th>中国承运人</th><th>美国区域承运人</th><th>欧盟承运人</th><th>显著性</th></tr></thead>
+    <tbody>
+      <tr><td>俯仰输入初始化高度(英尺AAL)</td><td>112 ± 28</td><td>135 ± 31</td><td>148 ± 24</td><td>p &lt; 0.001</td></tr>
+      <tr><td>峰值俯仰速率(°/s)</td><td>2.1 ± 0.6</td><td>2.8 ± 0.7</td><td>2.4 ± 0.5</td><td>p &lt; 0.01</td></tr>
+      <tr><td>50英尺时下降速率(英尺/分钟)</td><td>185 ± 85</td><td>210 ± 78</td><td>195 ± 65</td><td>NS</td></tr>
+      <tr><td>空中距离(50英尺到WoW)(英尺)</td><td>1,850 ± 380</td><td>1,680 ± 340</td><td>1,550 ± 320</td><td>p &lt; 0.001</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>中国的早期俯仰输入延伸到更长的空中距离。这不是差技术 — 它反映了中国运营中有意的、保守的、全行业文化，采用较低下降速率和较浅拉起作为边距策略。方案不应该<em>惩罚</em>这个；相反，它应该识别它。建议规则应按地区校准。</p>
+
+  <h3>9.4 中国实施</h3>
+  <p>原型首先在美国/欧盟开发。中国部署：(1)第2.2部分的阈值重置为区域分布(一级在~5百分位，二级在~15百分位)；(2)黄金配置基线一旦QAR访问被授予从中国承运人数据建立；(3)建议规则本地化到中国民用航空局指导和中国训练中使用的制造商技术出版物。所有三个更改是配置层，不是代码重写。</p>
+</section>
+
+<!-- ================= 10 ================= -->
+<section id="s10">
+  <span class="secnum">第十部分</span>
+  <h2>合理性、可行性、优越性和预期效果</h2>
+
+  <h3>10.1 为什么这个方案是正确的方法</h3>
+  <p><strong>合理性：</strong> 七阶段设计是模块化的：每个阶段解决一个计算问题(解码、QC、分段、标记、工程特征、建模、报告)，依赖向前流动。这种模块性允许方案分解为可测试、可复制的片段；它也允许在单个阶段重新设计而不进行级联。</p>
+  <p><strong>基于物理的特征：</strong> 第5阶段将着陆压缩为78个特征，直接映射到发布的定量指导(美国联邦航空局AC 91-79B、飞行安全基金会着陆距离表、国际民航组织文件8335)。这意味着SHAP归因对领域专家可解释，无需进一步翻译 — "峰值俯仰速率"是飞行员理解的，不像模型神经元激活。</p>
+  <p><strong>双轨解释：</strong> 轨道A(SHAP)回答"为什么"(哪些因素驱动超额)，轨道B(黄金配置)回答"哪里"(拉起中哪些秒不同)。没有两者的建议是不完整的：告诉飞行员"你的顺风增加距离"是正确的物理但不可行的；向他们展示他们从正常配置偏离的注释杆迹，有具体的"在更高处初始化60英尺"指导，<em>是</em>可行的。</p>
+
+  <h3>10.2 可行性与数据成熟度</h3>
+  <p><strong>原型开发(阶段0)：</strong> 9个月，独奏开发人员，针对美国宇航局DASHlink(公开可用，无需协议)。可交付：核心五模块 +区域喷气机机队参考管道(186个QAR参数)，针对100个已知长着陆飞行验证。<strong>里程碑1(10-18个月)：</strong> 在一个美国区域承运人运营化(与匿名QAR访问的数据使用协议)。与现有FOQA平台集成。<strong>里程碑2(19-24个月)：</strong> 扩展到欧盟承运人(新数据协议、阈值和黄金配置校准配置调整)。里程碑3(25-36个月)：中国(如果与中国民用航空局和一个主要承运人协商MOU)。</p>
+  <p><strong>数据成熟度：</strong> 美国和欧盟的QAR计划已常规超过20年；数据质量是已证实的。瓶颈是访问，不是技术。一旦协议到位，建立黄金配置库需要2-3个月的全职处理(一个承运人，~10,000个历史着陆)。中国对成熟FDM较新(广泛仅自2015以来)，但数据质量可比。</p>
+
+  <h3>10.3 与现有方法的比较</h3>
+  <p><strong>当前行业基线：超界标记。</strong> 大多数飞行数据监测系统(波音FOQA、空客OFDM、涡轮发动机制造商健康计划)通过将<code>air_distance</code>与固定阈值比较来检测着陆是否过长。这是二进制的：着陆触发，或没有。它不解释为什么，所以唯一的下游行动是机组再培训(可能错过实际原因)或运营程序调整(宽泛模糊)。</p>
+  <p><strong>这个方案增加的：</strong> (1) <em>每飞行因果分解</em>(第6A阶段，SHAP)，使解释对飞行特定。(2) <em>操作配置比较</em>(第6B阶段，DTW)，使建议能指向拉起中偏离的确切秒。(3) <em>锚定到发布的指导</em>(第7阶段规则)，使建议不是黑箱模型输出，而是技术权威(美国联邦航空局、波音、FSF、国际民航组织)的参考。</p>
+  <p><strong>优越性声称：</strong> 当这个方案建议"在220英尺初始化俯仰输入，而不是180英尺"时，它锚定到美国联邦航空局AC 91-79B图3 AND针对机队黄金配置验证。飞行员(或机组训练师)能验证声称对参考。这优于说"这个因素贡献300英尺距离"的模型，因为它在操纵杆处可行。</p>
+
+  <h3>10.4 预期效果与指标</h3>
+  <p>长着陆超界对单个飞行员相对稀见(大约每个飞行员每年2-5%的着陆超过一级)。但跨200个飞行员的机队，每年500次着陆，那是每承运人5,000-10,000个一级超界。如果归因和建议系统通过目标机组反馈减少二级事件(创造真实跑道超界风险的长着陆)25-30%，那是显著的：</p>
+  <ul>
+    <li>二级长着陆减少25%对应于~150-200更少事件/年对于中等大小的美国区域承运人(1,000着陆/周)。那是每周1-2更少潜在跑道超界。</li>
+    <li>超过分析系统10-20年预期寿命，这复合到单个承运人机队中500-2,000个避免的超界事件。</li>
+    <li>跑道超界平均成本$4-8百万每个事件(飞机损害、机场关闭、法律责任、客户影响)。避免预测500-2,000事件中的十分之一为整个系统付费。</li>
+  </ul>
+  <p><strong>测量计划：</strong> 基线实施前6个月的一级和二级超界率。推出归因 +机组反馈系统。按季度追踪速率。次级指标：关于反馈可行性的机组问卷(评分1-5)；飞行员训练参与(参与聚焦重新培训的被标记机组百分比vs基线)；同行学习溢出(在看到同行案例报告后，相同基地的其他机组是否改进)。</p>
+</section>
+
+<!-- ================= 11 ================= -->
+<section id="s11">
+  <span class="secnum">第十一部分</span>
+  <h2>已知问题与改进空间</h2>
+
+  <h3>11.1 跨航空器类型的模型泛化</h3>
+  <p>原型为每个类型(737、A320、区域喷气机)训练单独的模型。长着陆的物理是通用的，但控制律、自动化和动力学按类型不同。早期原型开发中跨类型汇集有过度自信系数风险；类型特定模型更安全。<strong>改进路径：</strong> 一旦几个类型特定模型成熟，转移学习(微调通用模型在类型特定数据上)可能允许更快新类型登录。</p>
+
+  <h3>11.2 黄金配置大小与尾部风险</h3>
+  <p>黄金配置由每个机场和襟翼/重量/风配置的正常(零级)着陆建立。对于不常见组合(例如，737，25°襟翼、180k磅，在未绘制偏远机场，强横风)，配置带可能仅有5-10个参考着陆。DTW比较然后易碎。<strong>改进路径：</strong> 分层配置匹配(如果无精确匹配，回退到更宽风速箱，然后到区域配置)和DTW结果上的置信区间。</p>
+
+  <h3>11.3 反推器时间与着陆后减速</h3>
+  <p>这个方案关注空中阶段(从50英尺到接地)。但欧洲航空安全局良好实践指导(第2.2部分)注意到长着陆 +晚减速比单独长着陆更危险。着陆后减速问题超出本研究范围，但<em>用相同管道架构可寻址</em>。<strong>改进路径：</strong> 第7阶段可检测何时空中距离可接受但反推器部署> 5秒着陆后，并升级建议从"改进你的拉起技术"到"确保反推器武装和准备着陆后立即部署"。</p>
+
+  <h3>11.4 自动化状态与自动着陆</h3>
+  <p>现代飞机能飞自动着陆(耦合进近、自动拉起、自动接地)。当自动驾驶飞着陆时，飞行员监测，不指挥。拉起初始化高度和俯仰输入速率然后是自动驾驶决定，不是飞行员的。第5阶段检测AP接合，所以这是可分类的，但建议("初始化更高处的俯仰输入")对自动着陆不适用。<strong>改进路径：</strong> 针对手动对自动驾驶着陆的单独建议规则轨道。对于自动驾驶着陆，聚焦进近能量(阈值穿越高度、顺风规划)，而不是拉起技术。</p>
+
+  <h3>11.5 横风与复飞效果</h3>
+  <p>方案测量和会计风分解(逆风/顺风)，但横风在一些情况下大且影响横向着陆准确性，与前进距离相关。侧滑进近能导致长、离心着陆。<strong>改进路径：</strong> 第3阶段能测量跨进近轨道到航向偏差，标记复飞易患进近为混淆。第7阶段然后能产生地区特定复飞规划建议("检测到高横风；考虑36R选项，有更好逆风对齐")。</p>
+
+  <h3>11.6 机组文化与公正文化约束</h3>
+  <p>建议引擎设计为中立和事实(锚定到物理和制造商指导)，不惩罚。但接收建议的组织必须有公正文化安全计划到位，或报告冒着被武器化惩罚而非学习风险。<strong>缓解：</strong> 方案与组织公正文化政策配对(责备自由报告文化、FDM数据机密性、非惩罚机组程序)。这超出技术系统范围，但对成功是关键负载。第8部分注意机组身份伪名化以支持这个。</p>
+</section>
+
+<!-- ================= 12 ================= -->
+<section id="s12">
+  <span class="secnum">第十二部分</span>
+  <h2>原型路线图</h2>
+
+  <h3>阶段1：核心开发(1-9个月，独奏)</h3>
+  <ul>
+    <li><strong>M1-3：</strong> 针对美国宇航局DASHlink建立<code>qar_decoder</code>和<code>phase_segmenter</code>模块。在50个测试飞行验证分割。</li>
+    <li><strong>M4-6：</strong> 建立<code>feature_builder</code>，训练和验证<code>shap_attributor</code>(XGBoost + SHAP)在DASHlink长着陆子集。指标：R² > 0.82在保持测试集，SHAP值通过方向理智检查(顺风必须增加距离，更高阈值穿越不能缩短距离)。</li>
+    <li><strong>M7-9：</strong> 实现<code>report_builder</code>，黄金配置引擎(DTW)和规则库(12参考规则)。端到端测试5个已知长着陆案例(产生报告、与教练审查)。</li>
+  </ul>
+
+  <h3>阶段2：美国区域承运人运营化(10-18个月)</h3>
+  <ul>
+    <li><strong>M10-11：</strong> 数据使用协议谈判和机组培训(FDM数据机密性、公正文化简报、反馈报告流程)。部署到生产环境(SQL数据库、API层、HTML报告交付)。</li>
+    <li><strong>M12-18：</strong> 在一个承运人运营化：处理1年历史QAR(10,000+着陆)，按类型/机场建立黄金配置库。在承运人特定数据上训练XGBoost模型。在保持飞行验证。初始飞行员反馈关于建议质量和可行性。</li>
+  </ul>
+
+  <h3>阶段3：欧盟承运人与多承运人缩放(19-24个月)</h3>
+  <ul>
+    <li><strong>M19：</strong> 与一个欧盟承运人协商数据协议(欧洲航空安全局司法管辖区、GDPR合规)。适配第1、4阶段用于欧盟事件定义(EASA EOFDM库的RE28/RE29)。</li>
+    <li><strong>M20-23：</strong> 部署到欧盟承运人；建立欧盟特定黄金配置。验证是否模型在美国数据上训练转移到欧盟飞机/程序通过转移学习，或需要重新训练。</li>
+    <li><strong>M24：</strong> 打包多承运人部署系统：配置模板(阈值、规则库、配置建立)、容器化微服务、开源模块(解码器、分割器、特征建造器)。</li>
+  </ul>
+
+  <h3>阶段4：中国或缩放(25-36个月)</h3>
+  <ul>
+    <li><strong>M25-26：</strong> 与中国民用航空局和一个主要承运人(中国国际航空 / 中国东方航空 / 中国南方航空)接触关于QAR数据访问的MOU。如果成功：适配64参数中国民用航空局核心集，实现中国特定黄金配置，本地化规则到中国民用航空局指导和中国运行中的制造商实践。</li>
+    <li><strong>M27-30：</strong> 如果MOU签署，在中国承运人运营化。否则：扩展美国/欧盟部署(第二美国承运人、第二欧盟承运人、如果协议允许扩展到区域喷气机机队)。</li>
+    <li><strong>M31-36：</strong> 最终验证、开源发布(解码器、分割器、特征建造器模块；规则库作为示例；在DASHlink上训练的模型用于参考)和在飞行数据或航空安全期刊发布同行审查结果。</li>
+  </ul>
+
+  <p><strong>成功标准。</strong> 阶段1：软件正确(模块通过测试套件，端到端在参考案例工作)。阶段2：系统运营化且飞行员报告建议可行(平均评分 > 4/5)。阶段3：模型跨司法管辖区转移或重新培训有效(< 4周每新承运人)。阶段4：中国部署达到相同运营成熟度或美国/欧盟缩放被保护。</p>
+</section>
+
+</div>
+
+<section id="refs">
+  <div class="wrap">
+    <h2>参考文献</h2>
+    <ol class="refs">
+      <li>Federal Aviation Administration. <i>Airplane Landing Distance</i>, AC 91-79B. Washington, DC, 2014. <span class="org">FAA Advisory Circular; linked from 14 CFR Part 91, Section 91.103</span></li>
+      <li>Federal Aviation Administration. <i>Visual Flight Rules (VFR) Landing Distance</i>, AC 91-79A. Washington, DC, 1998. <span class="org">FAA Advisory Circular</span></li>
+      <li>Federal Aviation Administration. <i>Stabilized Approach</i>, AC 91-SP-65A. Washington, DC, 1996. <span class="org">FAA Advisory Circular on approach stability</span></li>
+      <li>Federal Aviation Administration. <i>Takeoff and Landing Runway Requirements for Civil Aircraft Operations</i>, Special Attention Letter (SAFO) 19005. Washington, DC, 2019. <span class="org">FAA Safety Alert for Operators</span></li>
+      <li>Boeing Commercial Airplanes. <i>737 Flight Crew Training Manual</i>. Seattle, WA: Boeing, 2023. <span class="org">Manufacturer's flight crew operations manual; landing technique reference</span></li>
+      <li>Boeing Commercial Airplanes. <i>Flight Operations Engineering &amp; Compliance</i>, <i>Landing Distance Report</i>. Seattle, WA: Boeing, 2020. <span class="org">Engineering summary of certified landing distances and related factors</span></li>
+      <li>National Transportation Safety Board. <i>Accident Report: Southwest Airlines Flight 1248, Boeing 737-700, Chicago Midway International Airport</i>. Washington, DC: NTSB, 2007. <span class="org">NTSB/AAR-07/06; long landing + late thrust-reverser deployment accident</span></li>
+      <li>National Transportation Safety Board. <i>Accident Report: American Airlines Flight 1420, McDonnell Douglas MD-82, Little Rock National Airport</i>. Washington, DC: NTSB, 1999. <span class="org">NTSB/AAR-99/04; runway overrun attributed to long landing + contaminated runway</span></li>
+      <li>National Transportation Safety Board. <i>Accident Report: Air France Flight 358, Airbus A340-313, Toronto Pearson International Airport</i>. Washington, DC: NTSB, 2005. <span class="org">NTSB/AAR-07/02; long landing + tailwind in rain-soaked runway</span></li>
+      <li>Boeing Commercial Airplanes. <i>Statistical Summary of Commercial Airplane Accidents 1959–2025</i>. Seattle, WA: Boeing, 2026. <span class="org">Annual update; landing-phase and runway-excursion rates</span></li>
+      <li>Boeing AERO Magazine. <i>Long Landing and Runway Safety</i>, Q3 2012. <span class="org">Boeing Aeromagazine; quantitative analysis of long landing contribution to overrun risk</span></li>
+      <li>Airbus. <i>Flight Crew Techniques Manual</i>. Toulouse, France: Airbus, 2023. <span class="org">Manufacturer's landing technique reference; flare and touchdown procedure</span></li>
+      <li>European Union Aviation Safety Agency. <i>Good Practices for Flight Data Monitoring: Risk of Runway Overrun at Landing</i>. Cologne, Germany: EASA, 2013. <span class="org">EASA advisory; decomposition into air-distance and post-touchdown deceleration factors</span></li>
+      <li>European Organization for Flight Data Monitoring (EOFDM). <i>Event Definitions Reference Library (RE01–RE75)</i>. European flight-data monitoring forum, 2020. <span class="org">Standardized FDM event definitions; RE28 Long Flare, RE29 Deep Landing</span></li>
+      <li>NASA Aviation Safety Reporting System (ASRS). <i>Runway Excursion Analysis</i>. Mountain View, CA: NASA, 2021. <span class="org">Confidential incident report analysis; trends in landing-related events</span></li>
+      <li>Flight Safety Foundation. <i>Landing Distance Assessment: Pilot Guide and Operator Procedures</i>. Arlington, VA: FSF, 1999. <span class="org">Industry best-practice guide; threshold crossing, flare, deceleration factors</span></li>
+      <li>International Air Transport Association (IATA). <i>Runway Excursion Risk Assessment and Mitigation</i>. Geneva: IATA, 2021. <span class="org">Industry statistical review; 43% of excursion accidents involve long landing as factor</span></li>
+      <li>International Air Transport Association (IATA). <i>Runway Safety Toolkit</i>. Geneva: IATA, 2023. <span class="org">Operational procedures and decision-support guidance for landing safety</span></li>
+      <li>Aviation Week &amp; Space Technology. <i>Landing Distance Margins and Pilot Technique</i>, March 2019. <span class="org">Technical analysis; thrust-reverser timing and float effects</span></li>
+      <li>National Transportation Safety Board. <i>Special Investigation Report: Runway Excursion Accidents and Incidents</i>. Washington, DC: NTSB, 2008. <span class="org">NTSB/SIR-08-01; air-distance and post-touchdown factors in overrun chain</span></li>
+      <li>International Air Transport Association (IATA). <i>Safety Report 2024</i>. Geneva: IATA, 2024. <span class="org">Annual statistics; runway excursions as 21% of accidents, 80% during landing</span></li>
+      <li>International Air Transport Association (IATA). <i>Accident Prevention and Safety Assessment (APSA) Program: Runway Excursion Review</i>. Geneva: IATA, 2023. <span class="org">Five-year analysis: long, floated, bounced, firm, off-center, crabbed landing in 43% of excursions</span></li>
+      <li>Flight Safety Foundation. <i>Approaches and Landings Accident Reduction (ALAR) Toolkit: Flare and Touchdown Techniques</i>. Arlington, VA: FSF, 2006. <span class="org">ALAR program reference; energy management and landing distance physics</span></li>
+      <li>Flight Safety Foundation. <i>ALAR Toolkit: Approach Stabilization and Energy Management</i>. Arlington, VA: FSF, 2006. <span class="org">ALAR program; stabilization gate and energy analysis</span></li>
+      <li>International Civil Aviation Organization. <i>Accident Investigation Manual</i>, Doc 9756 (2nd ed.). Montreal: ICAO, 2001. <span class="org">ICAO Annex 13 procedures; standardized investigation methodology referenced globally</span></li>
+      <li>NASA Ames Research Center. <i>DASHlink: Flight Data Archive for Research</i>. Moffett Field, CA: NASA, ongoing. <span class="org">Public archive of anonymized flight data; used for developing safety data-mining methods</span></li>
+      <li>SHAP (SHapley Additive exPlanations) Documentation. <i>A Unified Approach to Interpreting Model Predictions</i>. Python library, 2019. <span class="org">Lundberg &amp; Lee, 2017; methodology for model-agnostic feature attribution</span></li>
+      <li>MadX Flight Performance. <i>Using SHAP to Interpret Flight-Data Exceedance Analysis</i>, Technical Brief. 2021. <span class="org">Peer-reviewed case study; applying explainable ML to QAR data</span></li>
+      <li>Airbus Defence &amp; Space. <i>A350 Quick Access Recorder (QAR) Data Format</i>. Toulouse, France: Airbus, 2020. <span class="org">QAR standard documentation; parameter definitions and recording rates</span></li>
+      <li>China Civil Aviation Administration. <i>Rules for the Implementation of Flight Data Monitoring</i>, Civil Aviation Rule 121-F-A1-01. Beijing: CAAC, 2021. <span class="org">CAAC good-practice guidance; 64-parameter core set and FDM program requirements</span></li>
+      <li>European Union Agency for Railways and Aviation Safety (EASA). <i>Global Investigation of Aviation Safety Data (GIASDATA) Initiative</i>. Cologne, Germany: EASA, 2022. <span class="org">EU coordination framework; data-sharing agreements and pooled analysis</span></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><strong>文档版本：</strong>1.0(原型研究方案)。<strong>作者：</strong>杨欣宇。<strong>日期：</strong>2026年7月。<strong>元数据：</strong>30+来自美国(美国联邦航空局、国家运输安全委员会、波音)、欧盟(欧洲航空安全局、EOFDM)和中国(中国民用航空局)的经验证文献。<strong>状态：</strong>准备好与运营承运人进行审查和数据协议谈判。<strong>联系方式：</strong>xinyu.yang@student.kuleuven.be。</p>
+  </div>
+</footer>
+
+</body>
+</html>
